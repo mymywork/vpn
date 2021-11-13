@@ -1,0 +1,97 @@
+.contact_table {
+	width:100%;
+}
+.contact_table td {
+	vertical-align:top;
+}
+
+.contact_list_table {
+	font-size:16px;
+	border-collapse: separate;
+	border-spacing: 30px 0px;
+	margin-left:40px;
+}
+
+.contact_list_table td {
+	padding:0px;
+}
+
+.contact_title {
+	font-size:30px;
+	padding-left:60px;
+}
+
+.contact_link {
+	text-decoration: underline;
+	color:#4285B2;
+}
+
+.contact_message_container {
+	width:500px;
+	margin: 0 auto;
+}
+
+.contact_message {
+    width:500px;
+	font-size:18px;
+}
+
+.contact_email {
+	width:500px;
+	border: 1px solid #CCCCCC;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.075) inset;
+	transition: border-color 0.15s ease-in-out 0s, box-shadow 0.15s ease-in-out 0s;
+	padding: 6px 12px;
+	font-size: 14px;
+	font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+	margin-bottom:10px;
+	color:#333333;
+}
+
+.contact_email:focus {
+	border-color: #66AFE9;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.075) inset, 0 0 8px rgba(102, 175, 233, 0.6);
+	outline: 0 none;
+}
+
+.contact_text {
+	color:#333333;
+	width:500px;
+	height:200px;
+	border: 1px solid #CCCCCC;
+	padding: 9px 12px;
+	transition: border-color 0.15s ease-in-out 0s, box-shadow 0.15s ease-in-out 0s;
+	font-size: 14px;
+	font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+	resize: none;
+	margin-bottom:10px;
+
+}
+
+.contact_text:focus {
+	border-color: #66AFE9;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.075) inset, 0 0 8px rgba(102, 175, 233, 0.6);
+	outline: 0 none;
+}
+
+
+.contact_button {
+	background-color: #4285b2;
+	border: 0px solid #4285b2;
+	font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+	color: #ffffff;
+	font-size: 18px;
+	margin: 0px 0px;
+	height: auto;
+	//line-height: 16px;
+	padding: 6px 6px;
+	transition: border-color 0.15s ease-in-out 0s, box-shadow 0.15s ease-in-out 0s;
+	width: 200px;
+	cursor:pointer;
+}
+
+.contact_button:hover {
+	background-color: #000000;
+}
+
+

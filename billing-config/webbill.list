@@ -1,0 +1,8 @@
+./postgresql.conf /etc/postgresql/?.?/main/postgresql.conf
+./default /etc/nginx/sites-available/default
+./radiusd.conf /etc/freeradius/radius.conf
+./sql.conf /etc/freeradius/sql.conf
+./users /etc/freeradius/users
+./clients.conf /etc/freeradius/clients.conf
+./accounts /opt/accounts
+./bin-webbill /opt

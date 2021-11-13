@@ -1,0 +1,274 @@
+DROP TABLE IF EXISTS accounts;
+CREATE TABLE IF NOT EXISTS accounts (
+	id             		BIGSERIAL PRIMARY KEY,
+	vpnlogin       		VARCHAR(64) NOT NULL DEFAULT '',
+	vpnpassword	        VARCHAR(64) NOT NULL DEFAULT '',
+	weblogin       		VARCHAR(64) NOT NULL DEFAULT '',
+	webpassword	        VARCHAR(64) NOT NULL DEFAULT '',
+	authkey		        VARCHAR(32) NOT NULL DEFAULT '',
+	timeplan	        INTEGER,
+	traffplan			INTEGER,
+	firststart	        TIMESTAMP with time zone,
+	laststop			TIMESTAMP with time zone,
+	traffin				BIGINT,
+	traffout			BIGINT,
+	traffinmax	    	BIGINT,
+	traffoutmax			BIGINT,
+	time		        BIGINT,
+	timemax		        BIGINT,
+	ratein				INTEGER,
+	rateout				INTEGER,	
+	balance				BIGINT,
+	sessions			INTEGER NOT NULL DEFAULT 1,
+	sessionsmax			INTEGER NOT NULL DEFAULT 1,
+	active				INTEGER NOT NULL DEFAULT 0
+);
+
+DROP TABLE IF EXISTS social_provider;
+CREATE TABLE IF NOT EXISTS social_provider (
+	identity			VARCHAR(256) NOT NULL PRIMARY KEY,
+	type				VARCHAR(64) DEFAULT '',
+	name				VARCHAR(64) DEFAULT NULL,
+	tid					INTEGER DEFAULT NULL
+); 
+
+CREATE OR REPLACE FUNCTION accounting() RETURNS TRIGGER AS $z$
+	DECLARE
+		myid INT;
+		mystop TIMESTAMP with time zone;
+		myfirststart TIMESTAMP with time zone;
+		myinrate INTEGER;
+		myoutrate INTEGER;
+		mysessions INTEGER;
+		mysessionsmax INTEGER;
+		tmp BOOLEAN;
+	BEGIN
+		RAISE NOTICE '----------------';
+		IF TG_OP = 'INSERT' THEN
+			SELECT id,firststart,ratein,rateout,sessions,sessionsmax INTO myid,myfirststart,myinrate,myoutrate,mysessions,mysessionsmax FROM accounts WHERE vpnlogin = NEW.username;
+			IF myid IS NULL THEN
+			-- Не создана, создаем c одной активной сессией сразу.
+               	--RAISE NOTICE '[*] insert->insert';
+				--INSERT INTO accounts(vpnlogin,vpnpassword,timeplan,traffplan,firststart,traffin,traffout,time,traffinmax,traffoutmax,timemax,ratein,rateout,balance,sessions,sessionsmax,active) values (NEW.username,'',1,0,NEW.acctstarttime,0,0,0,30000,30000,50000,1000,1000,50,0,1,1);
+				RAISE NOTICE '[*] session user not found in accounts -> pod';
+				PERFORM radpod(NEW.acctuser,NEW.acctsession,NEW.nasporttype);
+				RETURN NULL;
+			ELSE
+			-- Если существует в accounts, то увеличиваем число активных сессий и проверяем лимит
+				-- Проверяем число сессий, если равно то отключаем юзера.
+				IF mysessions = mysessionsmax THEN
+					RAISE NOTICE '[*] sessions is limit for % -> pod',NEW.username;
+					PERFORM radpod(NEW.acctuser,NEW.acctsession,NEW.nasporttype);
+					RETURN NULL;
+				END IF;
+				-- Если firststart ноль то устанавливаем ево.
+				IF myfirststart IS NOT NULL THEN
+					RAISE NOTICE '[*] insert->update accounts(sessions++)';
+					UPDATE accounts SET sessions=sessions+1 WHERE vpnlogin = NEW.username;
+				ELSE
+					RAISE NOTICE '[*] insert->update accounts(sessions++,firststart)';
+					UPDATE accounts SET sessions=sessions+1,firststart=NEW.acctstarttime WHERE vpnlogin = NEW.username;
+				END IF;
+			END IF;
+			-- Применяем шейпинг
+			PERFORM radshape(NEW.username,NEW.acctsessionid,NEW.nasporttype,NEW.framedipaddress,myinrate,myoutrate);
+			-- Аккаунтинг. Interim-Start
+			tmp := accountingplans(NEW.username,NEW.acctsessionid,NEW.nasporttype,0,COALESCE(NEW.acctinputoctets,0),COALESCE(NEW.acctoutputoctets,0),COALESCE(NEW.acctsessiontime,0));
+
+		ELSIF TG_OP = 'UPDATE' THEN
+			-- По остановке сессии суммируем трафик и время на записе и уменьшаем активные сессии.
+			mystop := NEW.acctstoptime;
+			IF mystop IS NOT NULL THEN
+				-- Interim-Stop
+				RAISE NOTICE '[*] update->stop';
+				tmp := accountingplans(OLD.username,OLD.acctsessionid,OLD.nasporttype,1,COALESCE(NEW.acctinputoctets,0),COALESCE(NEW.acctoutputoctets,0),COALESCE(NEW.acctsessiontime,0));
+			ELSE
+				-- простой Interim-Update
+				RAISE NOTICE '[*] update->interim';
+				tmp := accountingplans(OLD.username,OLD.acctsessionid,OLD.nasporttype,2,COALESCE(NEW.acctinputoctets,0),COALESCE(NEW.acctoutputoctets,0),COALESCE(NEW.acctsessiontime,0));
+			END IF;
+		END IF;
+		RETURN NEW;
+	END;
+$z$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS t_radacct ON radacct;
+CREATE TRIGGER t_radacct AFTER INSERT OR UPDATE ON radacct FOR EACH ROW EXECUTE PROCEDURE accounting();
+
+CREATE OR REPLACE FUNCTION radshape(acctuser text,acctsession text,nasporttype text,framedip inet,ratein integer,rateout integer) RETURNS void AS $x$
+	DECLARE
+		channel text;
+		request text;
+		output text;
+	BEGIN
+		channel := 'radchannel';
+		request := 'shape:' || acctuser || ':' || acctsession || ':' || nasporttype || ':' || host(framedip) || ':' || ratein::text || ':' || rateout::text;
+		EXECUTE 'SELECT pg_notify($1, $2);' INTO output USING channel,request;
+	END
+$x$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION radpod(acctuser text,acctsession text,nasporttype text) RETURNS void AS $x$
+	DECLARE
+		channel text;
+		request text;
+		output text;
+	BEGIN
+		channel := 'radchannel';
+		request :=  'pod:' || acctuser || ':' || acctsession || ':' || nasporttype;
+		EXECUTE 'SELECT pg_notify($1, $2);' INTO output USING channel,request;
+	END
+$x$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION accountingplans(acctuser text,acctsession text,nasporttype text,acctpkttype int,newin bigint,newout bigint,newtime bigint) RETURNS boolean AS $z$
+	DECLARE
+		radacctid int;
+		tmp int;
+		tmpin int;
+		tmpout int;
+		tmpsessions int;
+
+		mytraffplan int;
+		mytimeplan int;
+		myfirststart TIMESTAMP with time zone;
+		mylaststop TIMESTAMP with time zone;
+		mytraffin int;
+		mytraffout int;
+		mytraffinmax int;
+		mytraffoutmax int;
+		mytime int;
+		mytimemax int;
+		mysessions int;
+		mysessionsmax int;
+		myratein int;
+		myrateout int;
+		myactive int;
+
+		tmptxt text;
+	BEGIN
+		SELECT traffplan,timeplan,firststart,laststop,traffin,traffout,traffinmax,traffoutmax,time,timemax,active INTO mytraffplan,mytimeplan,myfirststart,mylaststop,mytraffin,mytraffout,mytraffinmax,mytraffoutmax,mytime,mytimemax,myactive FROM accounts WHERE vpnlogin=acctuser;
+
+		-- acctpkttype - 0 - Accounting-Start
+		-- acctpkttype - 1 - Accounting-Stop
+		-- acctpkttype - 2 - Accounting-Update
+        
+		-- Статистический тариф времени. Нетарифицируем по времени.
+		IF mytimeplan = 0 THEN
+			RAISE NOTICE '[>] Time Plan 0 - Zero Tariff.';
+			IF acctpkttype=1 THEN
+				RAISE NOTICE 'Stop packet, update accounts in=%, out=%',mytraffin,mytraffout;
+				UPDATE accounts SET traffin = traffin + newin, traffout = traffout + newout, time = time+newtime, sessions = sessions-1 WHERE vpnlogin=acctuser;
+			END IF;
+		-- Тарифицирует количество времени от времени первого логина, даже если пользователь не нарабатывает это время. 
+		ELSIF mytimeplan = 1 THEN
+			RAISE NOTICE '[>] Time Plan 1.';
+			-- Если первый пакет то устанавливаем таймфэст по первому интериму.
+			tmp := extract(epoch FROM (NOW()-myfirststart))::integer;
+			RAISE NOTICE 'estimate time %', tmp;
+			-- Если отрезок времени еще меньше отведенного времени.
+			IF tmp > mytimemax OR acctpkttype=1 THEN
+				-- Если время превышено.
+				IF acctpkttype=1 THEN
+					RAISE NOTICE 'Stop packet, update accounts in=%, out=%',mytraffin,mytraffout;
+					UPDATE accounts SET traffin = traffin + newin, traffout = traffout + newout, time = tmp, sessions = sessions-1 WHERE vpnlogin=acctuser;
+				ELSE
+					RAISE NOTICE 'Out of time. Send POD.';
+					PERFORM radpod(acctuser,acctsession,nasporttype);
+					RETURN TRUE;
+					-- Послать POD на отключение данной сессии.
+				END IF;
+			END IF;
+		-- Тарифицирует время которое наработал клиент, к отведеному клиенту времени.
+        ELSIF mytimeplan = 2 THEN
+			RAISE NOTICE '[>] Time Plan 2.';
+			IF (newtime + mytime) > mytimemax OR acctpkttype=1 THEN
+				-- Если время превышено
+				IF acctpkttype=1 THEN
+					RAISE NOTICE 'Stop packet, update accounts in=%, out=%',mytraffin,mytraffout;
+					UPDATE accounts SET traffin = traffin + newin, traffout = traffout + newout, time = time+newtime, sessions = sessions-1 WHERE vpnlogin=acctuser;
+				ELSE
+					RAISE NOTICE 'Out of time. Send POD.';
+					PERFORM radpod(acctuser,acctsession,nasporttype);
+					RETURN TRUE;
+					-- Послать POD на отключение данной сессии.
+				END IF;
+			END IF;
+		-- По отрезку при доступе.
+		ELSIF mytimeplan = 3 THEN
+			RAISE NOTICE '[>] Time Plan 3.';
+			-- Количество активных сессий.
+			SELECT COUNT(*) INTO tmpsessions FROM radacct WHERE UserName=acctuser AND AcctStopTime IS NULL;
+			tmp := extract(epoch FROM (NOW()-myfirststart))::integer+mytime;
+			IF tmp > mytimemax OR acctpkttype=1 THEN
+				-- Если stop пакет и сессий нету то.
+				RAISE NOTICE 'Active sessions=%',tmpsessions;
+				IF acctpkttype=1 THEN
+					RAISE NOTICE 'Stop packet, update accounts in=%, out=%',mytraffin,mytraffout;
+					IF tmpsessions > 1 THEN
+					-- Если есть более одной открытой сессии калькулируем только трафик.
+						RAISE NOTICE 'Have more than one session. Adding only traffic.';
+						UPDATE accounts SET traffin = traffin + newin, traffout = traffout + newout, sessions = sessions-1 WHERE vpnlogin=acctuser;
+					ELSE
+					-- Если есть только одна открытая сессия, которую мы ща закроем то суммируем все и обнуляем время старта
+						RAISE NOTICE 'Last session. Add time+traffic.';
+						UPDATE accounts SET firststart=NULL, traffin = traffin + newin, traffout = traffout + newout, time = tmp, sessions = sessions-1 WHERE vpnlogin=acctuser;
+					END IF;
+				ELSE
+					-- Послать POD на отключение данной сессии.
+					RAISE NOTICE 'Out of time. Send POD.';
+					PERFORM radpod(acctuser,acctsession,nasporttype);
+					RETURN TRUE;
+				END IF;
+			END IF;
+		-- По времени суммарного доступа.
+		ELSIF mytimeplan = 4 THEN
+			RAISE NOTICE '[>] Time Plan 4.';
+			SELECT SUM(acctsessiontime) INTO tmp FROM radacct WHERE UserName = acctuser AND AcctStopTime IS NULL;
+			IF (mytime+tmp) > mytimemax OR acctpkttype=1 THEN
+				-- Если время превышено (time = mytime)
+				IF acctpkttype=1 THEN
+					RAISE NOTICE 'Stop packet, update accounts estimate time = %, in=%, out=%',(mytime+tmp),mytraffin,mytraffout;
+					UPDATE accounts SET traffin = traffin + newin, traffout = traffout + newout, time = time+newtime, sessions = sessions-1 WHERE vpnlogin=acctuser;
+				ELSE
+					RAISE NOTICE 'Out of time. Send POD.';
+					PERFORM radpod(acctuser,acctsession,nasporttype);
+					RETURN TRUE;
+				END IF;
+			END IF;
+		END IF;
+
+		-- Учет по траффику.
+		IF mytraffplan = 0 THEN
+			RAISE NOTICE '[>] Traffic Plan 0 - Zero Traffic.';
+		-- Односессионый тариф по трафику.
+		ELSIF mytraffplan = 1 THEN
+			RAISE NOTICE '[>] Traffic Plan 1.';
+			RAISE NOTICE 'Traffic in = %, maxin = %, out = %, maxout = % ',(mytraffin+newin),myinmax,(mytraffout+newout),myoutmax;
+			IF (mytraffin+newin) > myinmax OR (mytraffout+newout) > myoutmax THEN
+				-- Если это не стоп пакет тогда посылаем POD отключаем по привышению траффика
+				IF acctpkttype != 1 THEN
+					RAISE NOTICE 'Traffic is out. Send POD';
+					PERFORM radpod(acctuser,acctsession,nasporttype);
+					RETURN TRUE;
+				END IF;
+			END IF;
+		-- Мультисессионый тариф по траффику.
+		ELSIF mytraffplan = 2 THEN
+			RAISE NOTICE '[>] Traffic Plan 2.';
+			tmpin := 0;
+			tmpout := 0;
+			SELECT COALESCE(SUM(acctinputoctets),0),COALESCE(SUM(acctoutputoctets),0) INTO tmpin,tmpout FROM radacct WHERE UserName = acctuser AND AcctStopTime IS NULL;
+			RAISE NOTICE 'Multisession traffic in = %, maxin = %, out = %, maxout = % ',(mytraffin+tmpin),myinmax,(mytraffout+tmpout),myoutmax;
+			IF (mytraffin+tmpin) > myinmax OR (mytraffout+tmpout) > myoutmax THEN
+				-- Если это не стоп пакет посылаем POD отключаем по привышению траффика.
+				IF acctpkttype != 1 THEN
+					-- + ДОПИСАТЬ УБИВАТЕЛЬ ВСЕХ СЕССИЙ
+					RAISE NOTICE 'Traffic is out. Send POD';
+					PERFORM radpod(acctuser,acctsession,nasporttype);
+					RETURN TRUE;
+				END IF;
+			END IF;
+		END IF; 
+	RETURN TRUE;
+END;
+$z$ LANGUAGE plpgsql;

@@ -1,0 +1,20 @@
+.error_container {
+	margin: 60px auto;
+	width:60%;
+	display:block;
+}
+.error_container a {
+ 	color:#4285b2;
+}
+
+.error_title {
+	font-size:40px;
+	font-weight:bold;
+	color:red;
+}
+.error_comment {
+	font-size:14px;
+	color:#cccccc;
+	margin:0px 5px;
+	line-height: 30px;
+}

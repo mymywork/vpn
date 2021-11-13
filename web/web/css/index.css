@@ -1,0 +1,196 @@
+
+.bg {
+	width:100%;
+	height:370px;
+	min-width: 970px;
+	background-color: #4285b2;
+	background-size: cover;
+}
+
+.image_text {
+	color:white;
+	font-size:25px;
+	position:absolute;
+}
+
+.image_text_a {
+    left: 40px;
+    top: 240px;
+}
+
+.bg_feature {
+	width:100%;
+	height:190px;
+	background-color:#2b2f3c;
+}
+
+.image_map {
+	margin: 0 auto;
+	display:block;
+
+}
+
+.feature_table {
+	padding-top:20px;
+	margin-left:auto;
+	margin-right:auto;
+	border-collapse: separate; /* Способ отображения границы */ 
+	border-spacing: 10px 5px;
+	text-align:center;
+ 	width:88%;
+}
+
+.feature_table td {
+	font-size:14px;
+	text-align:left;
+	line-height: 20px;
+	color: #ffffff;
+	vertical-align:top;
+}
+
+.feature_table li {
+ 	list-style: none;
+}
+
+.feature_title {
+	font-size:20px;
+}
+
+.feature_info_table {
+	margin-top: 25px;
+}
+
+.feature_info_table td {
+	vertical-align:middle;
+
+}
+
+.feature_unsecure {
+	color:#CE3B3B;
+	padding-left:10px;
+}
+
+.feature_options {
+	padding-left:15px;
+}
+
+/* try free button */
+
+.center_block {
+	border-bottom: 1px solid #dddddd;
+	padding: 10px 0;
+}
+
+.inner_block {
+	margin-left: auto;
+	margin-right: auto;
+/*RU*/
+	width:420px;
+	height:auto;
+}               	
+
+
+.try_button {
+	border: 2px solid #000000;
+	border-radius: 5px;
+	color: #000000;
+	font-size: 16px;
+	font-weight: bold;
+	line-height: 1.42857;
+	padding: 4px 18px;
+	transition: border-color 0.15s ease-in-out 0s, box-shadow 0.15s ease-in-out 0s;
+	width: auto;
+	height: 35px;
+	margin: 10px 10px;
+	cursor:pointer;
+	background: #4285B2;
+	text-align:center;
+	display:inline-block;
+}
+.try_button:hover {
+	background-color: #000000;
+	color: #ffffff;
+}
+
+
+
+.place_container {
+//  	background-color:#e4e7f0;
+	background-clip:content-box;
+	height:160px;
+	vertical-align:middle;
+	position:relative;
+//	background-image:url(/img/background.png);
+	background-repeat: repeat;
+	//border-bottom: 1px dashed #999999;
+}
+
+.place_left {
+	padding-left:94px;
+}
+
+.place_right {
+	padding-right:94px;
+}
+
+.place_img_left {
+	display:inline-block;
+	margin-left:-94px;
+}
+
+.place_img_right {
+	display:inline-block;
+	margin-right:-94px;
+}
+
+.place_text_left {
+	display:inline-block;
+	padding-left:0px;
+	padding-right:25px;
+	vertical-align:middle;
+	line-height:20px;
+}
+
+.place_text_right {
+	display:inline-block;
+	padding-left:25px;
+	padding-right:0px;
+	vertical-align:middle;
+	line-height:20px;
+}
+
+.title {
+	font-size:25px;
+	text-align:center;
+}
+
+.platforms {
+	text-align:center;
+}
+.platform_img {
+	width:60px;
+	margin:10px;
+}
+
+.countries {
+	margin-left:auto;
+	margin-right:auto;
+	border-collapse: separate; /* Способ отображения границы */ 
+	border-spacing: 5px 5px;
+}
+.country_flag {
+	border: 1px solid #999999;
+	font-size:16px;
+}
+.country_flag img {
+	height:25px;
+}	
+
+.country_descr {
+	padding-left:10px;		
+	padding-right:10px;		
+	text-align:left;
+	font-size:16px;
+	font-weight:bolder;
+}
+

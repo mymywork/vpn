@@ -1,0 +1,5 @@
+./accel-ppp.conf /etc/accel-ppp.conf
+./ipsec.conf /etc/ipsec.conf
+./test.conf /etc/openvpn/test.conf
+./testpsw.conf /etc/openvpn/testpsw.conf
+./bin-nas /opt

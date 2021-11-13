@@ -1,0 +1,47 @@
+.download_table td {
+	padding-bottom: 20px;
+	padding-left: 20px;
+	vertical-align:top;
+}
+
+.download_title {
+	font-size:32px;
+	color:#333333;
+}
+.download_subtitle {
+	font-size:14px;
+	color:#505050;
+	margin: 15px 20px;
+}
+
+.download_os_img {
+//	height:50px;
+//	height:40px;
+
+}
+
+.download_os {
+	font-size:18px;
+	//font-weight:bold;
+	//line-height:50px;
+	display:inline-block;
+	line-height:20px;
+	margin-left:15px;
+}
+
+.download_container {
+	margin: 0 40px;
+
+}
+
+.download_link_tip {
+	margin: 15px 0px;
+	color: #a0a0a0;
+	font-size:16px;
+}
+
+.download_link {
+ 	font-size:16px;
+	color:#4285B2;
+}
+
